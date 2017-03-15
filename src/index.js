@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { Component } from 'react';
 import { render } from 'react-dom';
 
 import {
   BrowserRouter as Router,
   Route,
-  Link
+  Link,
+  Redirect,
+  Switch
 } from 'react-router-dom'
 
 
@@ -76,17 +78,68 @@ const Post = (props) => {
 		)
 }
 
+class Dashboard extends React.Component {
+	render() {
+		return (
+				<h1>Dashboard</h1>
+			)
+	}
+}
+
+
 class App extends React.Component {
+
+	constructor() {
+		super();
+
+		this.state = {
+			po: {},
+			authed: false
+		};
+		this.logOut = this.logOut.bind(this)
+	}
+
+
+	componentDidMount() {
+		base.syncState(`posts`, {
+			context: this,
+			state: 'po'
+		});
+
+		base.onAuth((user) => {
+			if(user) {
+				this.setState({
+		          authed: true
+		        })
+			} else {
+				this.setState({
+		          authed: false
+		        })
+			}
+
+		})
+	}
+
+
+	logOut() {
+		base.unauth();
+	}
+
 	render() {
 		return (
 				<Router>
 					<div className="main">
-						<Header />	
+						<Header authed={this.state.authed} logOut={this.logOut}/>	
 						<div className="container">
-							<Route exact path="/" component={HomePage}/>
+						<Switch>
+							<Route exact path="/" component={HomePage} posts={this.state.po}/>
 						 	<Route path="/about" component={AboutPage}/>
 						 	<Route path="/contacts" component={ContactsPage}/>
 						 	<Route path="/login" component={LoginPage}/>
+						 	<PrivateRoute authed={this.state.authed} path='/dashboard' component={Dashboard} />
+						 	<PrivateRoute authed={this.state.authed} path='/posts-admin' component={PostsAdmin} />
+						 	<Route render={() => <h3>No Match</h3>} />
+						</Switch>
 						</div>
 					</div>
 				</Router>
@@ -96,10 +149,21 @@ class App extends React.Component {
 
 class HomePage extends React.Component {
 	render() {
+		console.log(this.props)
 		return (
 				<div className="home-page">
 					<h1>Hello cruel world!</h1>
 					<Posts />	
+				</div>
+			)
+	}
+}
+
+class PostsAdmin extends React.Component {
+	render() {
+		return (
+				<div className="posts-page">
+					posts
 				</div>
 			)
 	}
@@ -127,16 +191,48 @@ class ContactsPage extends React.Component {
 
 
 class LoginPage extends React.Component {
+	constructor() {
+		super();
+
+		this.loginUser = this.loginUser.bind(this);
+		this.authHandler = this.authHandler.bind(this);
+		this.errorHandler = this.errorHandler.bind(this);
+	}
+
+	errorHandler(error) {
+		// TODO
+		throw error;
+	}
+	
+
+
+	authHandler (error, user) {
+		if(error) this.errorHandler(error);
+		
+	}
+
+	loginUser(e) {
+		e.preventDefault();
+
+		const email = this.email.value;
+		const password = this.password.value;
+
+		base.authWithPassword({
+			email,
+			password
+		}, this.authHandler)
+	}
+
 	render() {
 		return (
 				<div className="row">
 					<div className="col-xs-12 col-sm-6 col-sm-offset-3 col-lg-4 col-lg-offset-4">
-						<form>
+						<form onSubmit={this.loginUser}>
 							<div className="form-group">
-								<input className="form-control" placeholder="Login"/>
+								<input type="email" className="form-control" placeholder="Login" ref={(input) => this.email = input}/>
 							</div>
 							<div className="form-group">
-								<input className="form-control" placeholder="Password"/>
+								<input type="password" className="form-control" placeholder="Password" ref={(input) => this.password = input}/>
 							</div>
 							<div className="btn-groupt">
 								<button className="btn btn-default">Send</button>
@@ -148,7 +244,11 @@ class LoginPage extends React.Component {
 	}
 }
 
-const Header = () => {
+const Header = (props) => {
+	const logOutUser = (e) => {
+		e.preventDefault();
+		props.logOut();
+	} 
 	return (
 			<header className="navbar navbar-inverse">
 				<div className="container">
@@ -158,15 +258,44 @@ const Header = () => {
 				    	<li><Link to="/">Home</Link></li>
 				    	<li><Link to="/about">About</Link></li>
 				    	<li><Link to="/contacts">Contacts</Link></li>
+				    	<li><Link to="/dashboard">Dashboard</Link></li>
 				  	</ul>
-				  	<ul className="nav navbar-nav navbar-right">
-				  		<li><Link to="/login">Login</Link></li>
-				  	</ul>
+				  	
+			  			{props.authed ? 
+			  				<ul className="nav navbar-nav navbar-right">
+			  					<li><Link to="/posts-admin">Add Post</Link></li>
+			  					<li><a href="#" onClick={logOutUser}>Logout</a></li>			  					
+			  				</ul>
+			  				:
+			  				<ul className="nav navbar-nav navbar-right">
+			  					<li><Link to="/login">Login</Link></li>
+		  					</ul>
+				  		}
 			   	  </div>
 			    </div>
 			</header>
 		)
 }
+
+
+
+
+const PublicRoute = () => {
+	
+}
+
+const PrivateRoute = ({component: Component, authed, ...rest}) => {
+	return (
+		<Route
+			{...rest}
+			render={(props) => authed === true
+			? <Component {...props} />
+			: <Redirect to={{pathname: '/login', state: {from: props.location}}} />}
+		/>
+	)
+}
+
+
 
 
 render(<App />, document.getElementById('root'))
